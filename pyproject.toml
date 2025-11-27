@@ -1,6 +1,6 @@
 [project]
 name = "pyo3-levenshtein"
-version = "0.1.0"
+version = "0.2.0"
 description = "Add your description here"
 requires-python = ">=3.10"
 dependencies = []
@@ -16,3 +16,6 @@ dev = [
     "pytest>=9.0.1",
     "pytest-benchmark>=5.2.3",
 ]
+
+[tool.uv]
+cache-keys = [{file = "pyproject.toml"}, {file = "Cargo.toml"}, {file = "**/*.rs"}]

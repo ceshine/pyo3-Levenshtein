@@ -1,4 +1,6 @@
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use rayon::prelude::*;
 
 /// Calculates the Levenshtein distance between two strings.
 ///
@@ -71,10 +73,90 @@ pub fn levenshtein(s1: &str, s2: &str) -> usize {
     matrix[len1][len2]
 }
 
+/// Calculates Levenshtein distances for multiple string pairs in parallel.
+///
+/// This function processes a list of string pairs concurrently using multiple threads,
+/// releasing Python's GIL to enable true parallelism. It uses Rayon's work-stealing
+/// scheduler for optimal load balancing across CPU cores.
+///
+/// # Arguments
+///
+/// * `pairs` - A vector of string pairs (tuples) to process
+/// * `num_threads` - Optional number of threads to use. If None, uses all available CPU cores
+///
+/// # Returns
+///
+/// A vector of Levenshtein distances in the same order as the input pairs
+///
+/// # Errors
+///
+/// Returns `PyValueError` if:
+/// * `num_threads` is 0
+/// * Thread pool creation fails
+///
+/// # Examples
+///
+/// ```python
+/// import pyo3_levenshtein as lev
+///
+/// pairs = [("kitten", "sitting"), ("hello", "world")]
+/// distances = lev.levenshtein_batch(pairs)  # Uses all CPU cores
+/// distances = lev.levenshtein_batch(pairs, num_threads=4)  # Uses 4 threads
+/// ```
+#[pyfunction(signature = (pairs, num_threads=None))]
+pub fn levenshtein_batch(
+    py: Python<'_>,
+    pairs: Vec<(String, String)>,
+    num_threads: Option<usize>,
+) -> PyResult<Vec<usize>> {
+    // Handle empty input
+    if pairs.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Validate thread count if specified
+    if let Some(threads) = num_threads {
+        if threads == 0 {
+            return Err(PyValueError::new_err("num_threads must be at least 1"));
+        }
+    }
+
+    // Release GIL and perform computation
+    // The computation is entirely in Rust and doesn't need Python access
+    let result = py.detach(|| {
+        if let Some(threads) = num_threads {
+            // Build custom thread pool
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(threads)
+                .build()
+                .map_err(|e| format!("Failed to create thread pool: {}", e))
+                .and_then(|pool| {
+                    Ok(pool.install(|| {
+                        pairs
+                            .par_iter()
+                            .map(|(s1, s2)| levenshtein(s1, s2))
+                            .collect()
+                    }))
+                })
+        } else {
+            // Use default rayon pool (num CPUs)
+            Ok(pairs
+                .par_iter()
+                .map(|(s1, s2)| levenshtein(s1, s2))
+                .collect())
+        }
+    });
+
+    result.map_err(|e| PyValueError::new_err(e))
+}
+
 #[pymodule]
 mod pyo3_levenshtein {
     #[pymodule_export]
     use super::levenshtein;
+
+    #[pymodule_export]
+    use super::levenshtein_batch;
 }
 
 #[cfg(test)]
@@ -107,5 +189,110 @@ mod tests {
     fn test_unicode() {
         assert_eq!(levenshtein("café", "cafe"), 1);
         assert_eq!(levenshtein("🦀", "🐍"), 1);
+    }
+}
+
+#[cfg(test)]
+mod batch_tests {
+    use super::*;
+
+    #[test]
+    fn test_batch_empty() {
+        pyo3::prepare_freethreaded_python();
+        Python::with_gil(|py| {
+            let pairs: Vec<(String, String)> = vec![];
+            let result = levenshtein_batch(py, pairs, None).unwrap();
+            assert_eq!(result, Vec::<usize>::new());
+        });
+    }
+
+    #[test]
+    fn test_batch_single_pair() {
+        pyo3::prepare_freethreaded_python();
+        Python::with_gil(|py| {
+            let pairs = vec![("kitten".to_string(), "sitting".to_string())];
+            let result = levenshtein_batch(py, pairs, None).unwrap();
+            assert_eq!(result, vec![3]);
+        });
+    }
+
+    #[test]
+    fn test_batch_multiple_pairs() {
+        pyo3::prepare_freethreaded_python();
+        Python::with_gil(|py| {
+            let pairs = vec![
+                ("kitten".to_string(), "sitting".to_string()),
+                ("hello".to_string(), "hello".to_string()),
+                ("".to_string(), "world".to_string()),
+                ("café".to_string(), "cafe".to_string()),
+            ];
+            let result = levenshtein_batch(py, pairs, None).unwrap();
+            assert_eq!(result, vec![3, 0, 5, 1]);
+        });
+    }
+
+    #[test]
+    fn test_batch_custom_threads() {
+        pyo3::prepare_freethreaded_python();
+        Python::with_gil(|py| {
+            let pairs = vec![
+                ("kitten".to_string(), "sitting".to_string()),
+                ("hello".to_string(), "world".to_string()),
+            ];
+            let result = levenshtein_batch(py, pairs, Some(2)).unwrap();
+            assert_eq!(result.len(), 2);
+            // Verify correctness
+            assert_eq!(result[0], levenshtein("kitten", "sitting"));
+            assert_eq!(result[1], levenshtein("hello", "world"));
+        });
+    }
+
+    #[test]
+    fn test_batch_invalid_thread_count() {
+        pyo3::prepare_freethreaded_python();
+        Python::with_gil(|py| {
+            let pairs = vec![("test".to_string(), "test".to_string())];
+            let result = levenshtein_batch(py, pairs, Some(0));
+            assert!(result.is_err());
+            assert!(
+                result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("num_threads must be at least 1")
+            );
+        });
+    }
+
+    #[test]
+    fn test_batch_unicode() {
+        pyo3::prepare_freethreaded_python();
+        Python::with_gil(|py| {
+            let pairs = vec![
+                ("🦀".to_string(), "🐍".to_string()),
+                ("café".to_string(), "cafe".to_string()),
+            ];
+            let result = levenshtein_batch(py, pairs, None).unwrap();
+            assert_eq!(result, vec![1, 1]);
+        });
+    }
+
+    #[test]
+    fn test_batch_consistency_with_single() {
+        pyo3::prepare_freethreaded_python();
+        Python::with_gil(|py| {
+            let test_cases = vec![
+                ("kitten".to_string(), "sitting".to_string()),
+                ("saturday".to_string(), "sunday".to_string()),
+                ("".to_string(), "".to_string()),
+                ("abc".to_string(), "".to_string()),
+            ];
+
+            let batch_results = levenshtein_batch(py, test_cases.clone(), None).unwrap();
+
+            // Verify each result matches single function call
+            for (i, (s1, s2)) in test_cases.iter().enumerate() {
+                assert_eq!(batch_results[i], levenshtein(s1, s2));
+            }
+        });
     }
 }
