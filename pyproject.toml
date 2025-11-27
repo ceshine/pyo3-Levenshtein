@@ -2,7 +2,7 @@
 name = "pyo3-levenshtein"
 version = "0.1.0"
 description = "Add your description here"
-requires-python = ">=3.13"
+requires-python = ">=3.10"
 dependencies = []
 
 [build-system]
@@ -11,5 +11,5 @@ build-backend = "maturin"
 
 [dependency-groups]
 dev = [
-    "ipython>=9.7.0",
+    "ipython>=8.37.0",
 ]
