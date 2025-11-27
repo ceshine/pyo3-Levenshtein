@@ -12,4 +12,7 @@ build-backend = "maturin"
 [dependency-groups]
 dev = [
     "ipython>=8.37.0",
+    "levenshtein>=0.27.3",
+    "pytest>=9.0.1",
+    "pytest-benchmark>=5.2.3",
 ]
