@@ -71,11 +71,10 @@ pub fn levenshtein(s1: &str, s2: &str) -> usize {
     matrix[len1][len2]
 }
 
-/// PyO3 module definition for exposing functions to Python
 #[pymodule]
-fn pyo3_levenshtein(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(levenshtein, m)?)?;
-    Ok(())
+mod pyo3_levenshtein {
+    #[pymodule_export]
+    use super::levenshtein;
 }
 
 #[cfg(test)]
