@@ -26,6 +26,21 @@ print(lev.levenshtein("café", "cafe"))  # Output: 1
 print(lev.levenshtein("🦀", "🐍"))      # Output: 1
 ```
 
+## Benchmarks
+
+Performance comparison of different Levenshtein distance implementations (run with `uv run pytest benchmarking/benchmarks.py --benchmark-max-time 10`):
+
+| Implementation | Min (μs) | Max (μs) | Mean (μs) | Median (μs) | Std Dev | OPS (Kops/s) | Rounds | Relative Speed |
+|----------------|----------|----------|-----------|-------------|---------|--------------|--------|----------------|
+| C (python-Levenshtein) | 9.82 | 33.92 | 10.99 | 10.90 | 0.49 | 90.98 | 517,921 | 1.0x (baseline) |
+| PyO3 (this project) | 23.55 | 96.64 | 26.05 | 26.01 | 1.50 | 38.38 | 183,362 | 2.4x slower |
+| Pure Python | 1,143.89 | 2,525.57 | 1,271.82 | 1,269.32 | 52.94 | 0.79 | 7,729 | 115.7x slower |
+
+**Key takeaways:**
+- PyO3 implementation is **~48.8x faster** than pure Python implementation
+- PyO3 implementation is **~2.4x slower** than the C-based `python-Levenshtein` package
+- PyO3 provides a good balance between performance and maintainability with Rust's memory safety guarantees
+
 ## Development
 
 ### Prerequisites

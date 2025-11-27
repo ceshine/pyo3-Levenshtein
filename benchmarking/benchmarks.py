@@ -7,7 +7,7 @@ from Levenshtein import distance as c_levenshtein
 from pure_python_impl import wf_levenshtein as py_levenshtein
 from pyo3_levenshtein import levenshtein as pyo3_levenshten_
 
-TEST_DATASET_SIZE = 10
+TEST_DATASET_SIZE = 50
 MAX_STRING_LENGTH = 20
 
 
