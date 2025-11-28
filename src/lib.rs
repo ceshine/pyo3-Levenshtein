@@ -126,25 +126,25 @@ pub fn levenshtein_batch(
     // The computation is entirely in Rust and doesn't need Python access
     let result = py.detach(|| {
         if let Some(threads) = num_threads {
-            // Build custom thread pool
-            rayon::ThreadPoolBuilder::new()
-                .num_threads(threads)
-                .build()
-                .map_err(|e| format!("Failed to create thread pool: {}", e))
-                .and_then(|pool| {
-                    Ok(pool.install(|| {
-                        pairs
-                            .par_iter()
-                            .map(|(s1, s2)| levenshtein(s1, s2))
-                            .collect()
-                    }))
-                })
+            match rayon::ThreadPoolBuilder::new().num_threads(threads).build() {
+                Err(e) => return Err(format!("Failed to create thread pool: {}", e)),
+                Ok(pool) => pool.install(|| {
+                    Ok(pairs
+                        .par_iter()
+                        .map(|(s1, s2)| levenshtein(s1, s2))
+                        .collect())
+                }),
+            }
         } else {
-            // Use default rayon pool (num CPUs)
-            Ok(pairs
-                .par_iter()
-                .map(|(s1, s2)| levenshtein(s1, s2))
-                .collect())
+            match rayon::ThreadPoolBuilder::default().build() {
+                Err(e) => return Err(format!("Failed to create thread pool: {}", e)),
+                Ok(pool) => pool.install(|| {
+                    Ok(pairs
+                        .par_iter()
+                        .map(|(s1, s2)| levenshtein(s1, s2))
+                        .collect())
+                }),
+            }
         }
     });
 

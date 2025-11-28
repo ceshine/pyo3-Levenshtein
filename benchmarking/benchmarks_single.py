@@ -1,14 +1,15 @@
 import random
 import string
+from typing import Callable
 
 import pytest
-
 from Levenshtein import distance as c_levenshtein
-from pure_python_impl import wf_levenshtein as py_levenshtein
 from pyo3_levenshtein import levenshtein as pyo3_levenshten_
 
-TEST_DATASET_SIZE = 50
-MAX_STRING_LENGTH = 20
+from .pure_python_impl import wf_levenshtein as py_levenshtein
+
+TEST_DATASET_SIZE = 2**14
+MAX_STRING_LENGTH = 50
 
 
 def build_test_dataset(num_pairs: int) -> list[tuple[str, str, int]]:
@@ -44,58 +45,53 @@ def test_dataset() -> list[tuple[str, str, int]]:
     return build_test_dataset(TEST_DATASET_SIZE)
 
 
-def run_py_levenshtein(test_dataset: list[tuple[str, str, int]]) -> list[int]:
+def run_levenshtein(test_dataset: list[tuple[str, str, int]], distance_func: Callable[[str, str], int]) -> list[int]:
+    """Run a levenshtein distance function on a test dataset.
+
+    Args:
+        test_dataset: List of tuples containing (str1, str2, expected_distance)
+        distance_func: The levenshtein distance function to use
+
+    Returns:
+        List of computed distances
+    """
     result: list[int] = []
     for str1, str2, _ in test_dataset:
-        result.append(py_levenshtein(str1, str2))
+        result.append(distance_func(str1, str2))
     return result
 
 
-def run_pyo3_levenshten(test_dataset: list[tuple[str, str, int]]) -> list[int]:
-    result: list[int] = []
-    for str1, str2, _ in test_dataset:
-        result.append(pyo3_levenshten_(str1, str2))
-    return result
-
-
-def run_c_levenshten(test_dataset: list[tuple[str, str, int]]) -> list[int]:
-    result: list[int] = []
-    for str1, str2, _ in test_dataset:
-        result.append(c_levenshtein(str1, str2))
-    return result
-
-
-def test_py_levenshtein(test_dataset):
-    res = run_py_levenshtein(test_dataset)
+def test_py_levenshtein(test_dataset: list[tuple[str, str, int]]):
+    res = run_levenshtein(test_dataset, py_levenshtein)
     assert len(res) == TEST_DATASET_SIZE
     for pred, (_, _, gt) in zip(res, test_dataset):
         assert pred == gt
 
 
-def test_pyo3_levenshten(test_dataset):
-    res = run_pyo3_levenshten(test_dataset)
+def test_pyo3_levenshten(test_dataset: list[tuple[str, str, int]]):
+    res = run_levenshtein(test_dataset, pyo3_levenshten_)
     assert len(res) == TEST_DATASET_SIZE
     for pred, (_, _, gt) in zip(res, test_dataset):
         assert pred == gt
 
 
-def test_c_levenshten(test_dataset):
-    res = run_c_levenshten(test_dataset)
+def test_c_levenshten(test_dataset: list[tuple[str, str, int]]):
+    res = run_levenshtein(test_dataset, c_levenshtein)
     assert len(res) == TEST_DATASET_SIZE
     for pred, (_, _, gt) in zip(res, test_dataset):
         assert pred == gt
 
 
-def test_benchmark_py_levenshtein(benchmark, test_dataset):
-    res = benchmark(lambda: run_py_levenshtein(test_dataset))
+def test_benchmark_py_levenshtein(benchmark, test_dataset: list[tuple[str, str, int]]):
+    res = benchmark(lambda: run_levenshtein(test_dataset, py_levenshtein))
     assert len(res) == TEST_DATASET_SIZE
 
 
-def test_benchmark_pyo3_levenshtein(benchmark, test_dataset):
-    res = benchmark(lambda: run_pyo3_levenshten(test_dataset))
+def test_benchmark_pyo3_levenshtein(benchmark, test_dataset: list[tuple[str, str, int]]):
+    res = benchmark(lambda: run_levenshtein(test_dataset, pyo3_levenshten_))
     assert len(res) == TEST_DATASET_SIZE
 
 
-def test_benchmark_c_levenshtein(benchmark, test_dataset):
-    res = benchmark(lambda: run_c_levenshten(test_dataset))
+def test_benchmark_c_levenshtein(benchmark, test_dataset: list[tuple[str, str, int]]):
+    res = benchmark(lambda: run_levenshtein(test_dataset, c_levenshtein))
     assert len(res) == TEST_DATASET_SIZE
