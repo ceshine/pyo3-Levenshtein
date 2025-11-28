@@ -11,6 +11,7 @@ use rayon::prelude::*;
 /// # Examples
 ///
 /// ```
+/// use pyo3_levenshtein::levenshtein;
 /// let distance = levenshtein("kitten", "sitting");
 /// assert_eq!(distance, 3);
 /// ```
@@ -198,8 +199,8 @@ mod batch_tests {
 
     #[test]
     fn test_batch_empty() {
-        pyo3::prepare_freethreaded_python();
-        Python::with_gil(|py| {
+        Python::initialize();
+        Python::attach(|py| {
             let pairs: Vec<(String, String)> = vec![];
             let result = levenshtein_batch(py, pairs, None).unwrap();
             assert_eq!(result, Vec::<usize>::new());
@@ -208,8 +209,8 @@ mod batch_tests {
 
     #[test]
     fn test_batch_single_pair() {
-        pyo3::prepare_freethreaded_python();
-        Python::with_gil(|py| {
+        Python::initialize();
+        Python::attach(|py| {
             let pairs = vec![("kitten".to_string(), "sitting".to_string())];
             let result = levenshtein_batch(py, pairs, None).unwrap();
             assert_eq!(result, vec![3]);
@@ -218,8 +219,8 @@ mod batch_tests {
 
     #[test]
     fn test_batch_multiple_pairs() {
-        pyo3::prepare_freethreaded_python();
-        Python::with_gil(|py| {
+        Python::initialize();
+        Python::attach(|py| {
             let pairs = vec![
                 ("kitten".to_string(), "sitting".to_string()),
                 ("hello".to_string(), "hello".to_string()),
@@ -233,8 +234,8 @@ mod batch_tests {
 
     #[test]
     fn test_batch_custom_threads() {
-        pyo3::prepare_freethreaded_python();
-        Python::with_gil(|py| {
+        Python::initialize();
+        Python::attach(|py| {
             let pairs = vec![
                 ("kitten".to_string(), "sitting".to_string()),
                 ("hello".to_string(), "world".to_string()),
@@ -249,8 +250,8 @@ mod batch_tests {
 
     #[test]
     fn test_batch_invalid_thread_count() {
-        pyo3::prepare_freethreaded_python();
-        Python::with_gil(|py| {
+        Python::initialize();
+        Python::attach(|py| {
             let pairs = vec![("test".to_string(), "test".to_string())];
             let result = levenshtein_batch(py, pairs, Some(0));
             assert!(result.is_err());
@@ -265,8 +266,8 @@ mod batch_tests {
 
     #[test]
     fn test_batch_unicode() {
-        pyo3::prepare_freethreaded_python();
-        Python::with_gil(|py| {
+        Python::initialize();
+        Python::attach(|py| {
             let pairs = vec![
                 ("🦀".to_string(), "🐍".to_string()),
                 ("café".to_string(), "cafe".to_string()),
@@ -278,8 +279,8 @@ mod batch_tests {
 
     #[test]
     fn test_batch_consistency_with_single() {
-        pyo3::prepare_freethreaded_python();
-        Python::with_gil(|py| {
+        Python::initialize();
+        Python::attach(|py| {
             let test_cases = vec![
                 ("kitten".to_string(), "sitting".to_string()),
                 ("saturday".to_string(), "sunday".to_string()),

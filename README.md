@@ -26,6 +26,35 @@ print(lev.levenshtein("café", "cafe"))  # Output: 1
 print(lev.levenshtein("🦀", "🐍"))      # Output: 1
 ```
 
+### Batch Processing (Multi-threaded)
+
+For calculating distances on multiple string pairs, use the parallel batch function:
+
+```python
+import pyo3_levenshtein as lev
+
+# Prepare multiple string pairs
+pairs = [
+    ("kitten", "sitting"),
+    ("saturday", "sunday"),
+    ("hello", "world"),
+]
+
+# Process all pairs in parallel (uses all CPU cores by default)
+distances = lev.levenshtein_batch(pairs)
+print(distances)  # Output: [3, 3, 4]
+
+# Control thread count explicitly
+distances = lev.levenshtein_batch(pairs, num_threads=4)
+```
+
+The `levenshtein_batch` function:
+- Releases Python's GIL for true parallel processing
+- Uses Rayon's work-stealing scheduler for optimal load balancing
+- Defaults to using all available CPU cores
+- Returns results in the same order as input pairs
+- Best for processing 50+ pairs at once
+
 ## Benchmarks
 
 Performance comparison of different Levenshtein distance implementations (run with `uv run pytest benchmarking/benchmarks.py --benchmark-max-time 10`):
@@ -55,7 +84,7 @@ Performance comparison of different Levenshtein distance implementations (run wi
 
 ```bash
 # Compile and install in editable mode
-maturin develop --release
+maturin develop --release --uv
 ```
 
 You can use `ipython` or write a simple script after installing to use the Rust-powered module:
@@ -72,8 +101,16 @@ maturin build --release
 
 ### Testing
 
-Rust unit tests:
+Rust unit tests (requires a Python virtual environment):
 
 ```bash
-cargo test
+./run-cargo-tests.sh
+```
+
+The test setup automatically detects and uses the Python interpreter from your `.venv` environment, making it portable across different machines and Python installations.
+
+Python tests with pytest:
+
+```bash
+uv run pytest
 ```
