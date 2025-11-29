@@ -1,6 +1,46 @@
+use dashmap::DashMap;
+use once_cell::sync::Lazy;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use rayon::prelude::*;
+use std::sync::Arc;
+
+/// Global cache of thread pools, keyed by thread count.
+/// This allows reusing thread pools across multiple function calls,
+/// avoiding the overhead of creating new thread pools each time.
+static THREAD_POOL_CACHE: Lazy<DashMap<usize, Arc<rayon::ThreadPool>>> = Lazy::new(DashMap::new);
+
+/// Gets an existing thread pool from the cache or creates a new one.
+///
+/// # Arguments
+///
+/// * `num_threads` - The number of threads for the pool
+///
+/// # Returns
+///
+/// An `Arc` to the thread pool, either from cache or newly created
+///
+/// # Errors
+///
+/// Returns an error string if thread pool creation fails
+fn get_or_create_pool(num_threads: usize) -> Result<Arc<rayon::ThreadPool>, String> {
+    // Try to get from cache first
+    if let Some(pool) = THREAD_POOL_CACHE.get(&num_threads) {
+        return Ok(Arc::clone(pool.value()));
+    }
+
+    // Create new pool if not in cache
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(num_threads)
+        .build()
+        .map_err(|e| format!("Failed to create thread pool: {}", e))?;
+
+    let pool_arc = Arc::new(pool);
+
+    // Insert into cache and return
+    THREAD_POOL_CACHE.insert(num_threads, Arc::clone(&pool_arc));
+    Ok(pool_arc)
+}
 
 /// Calculates the Levenshtein distance between two strings.
 ///
@@ -124,31 +164,27 @@ pub fn levenshtein_batch(
 
     // Release GIL and perform computation
     // The computation is entirely in Rust and doesn't need Python access
-    let result = py.detach(|| {
+    py.detach(|| {
         if let Some(threads) = num_threads {
-            match rayon::ThreadPoolBuilder::new().num_threads(threads).build() {
-                Err(e) => return Err(format!("Failed to create thread pool: {}", e)),
-                Ok(pool) => pool.install(|| {
-                    Ok(pairs
-                        .par_iter()
-                        .map(|(s1, s2)| levenshtein(s1, s2))
-                        .collect())
-                }),
-            }
-        } else {
-            match rayon::ThreadPoolBuilder::default().build() {
-                Err(e) => return Err(format!("Failed to create thread pool: {}", e)),
-                Ok(pool) => pool.install(|| {
-                    Ok(pairs
-                        .par_iter()
-                        .map(|(s1, s2)| levenshtein(s1, s2))
-                        .collect())
-                }),
-            }
-        }
-    });
+            // Use cached thread pool for the specified thread count
+            let pool = get_or_create_pool(threads)
+                .map_err(PyValueError::new_err)?;
 
-    result.map_err(|e| PyValueError::new_err(e))
+            Ok(pool.install(|| {
+                pairs
+                    .par_iter()
+                    .map(|(s1, s2)| levenshtein(s1, s2))
+                    .collect()
+            }))
+        } else {
+            // Use the global thread pool (lazily initialized and reused by Rayon)
+            // This avoids creating a new thread pool on every call
+            Ok(pairs
+                .par_iter()
+                .map(|(s1, s2)| levenshtein(s1, s2))
+                .collect())
+        }
+    })
 }
 
 #[pymodule]
