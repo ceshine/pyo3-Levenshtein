@@ -7,14 +7,19 @@ def test_batch_empty():
     """Test batch function with empty list."""
     result = levenshtein_batch([])
     assert result == []
+    result_grapheme = levenshtein_batch([], grapheme_segmentation=True)
+    assert result_grapheme == []
 
 
 def test_batch_single_pair():
     """Test batch function with single pair."""
     pairs = [("kitten", "sitting")]
-    result = levenshtein_batch(pairs)
-    assert result == [3]
-    assert result[0] == levenshtein("kitten", "sitting")
+    result_char = levenshtein_batch(pairs, grapheme_segmentation=False)
+    assert result_char == [3]
+    assert result_char[0] == levenshtein("kitten", "sitting", grapheme_segmentation=False)
+    result_grapheme = levenshtein_batch(pairs, grapheme_segmentation=True)
+    assert result_grapheme == [3]
+    assert result_grapheme[0] == levenshtein("kitten", "sitting", grapheme_segmentation=True)
 
 
 def test_batch_multiple_pairs():
@@ -100,3 +105,39 @@ def test_batch_consistency():
     single_results = [levenshtein(s1, s2) for s1, s2 in test_cases]
 
     assert batch_result == single_results
+
+
+def test_batch_grapheme_segmentation():
+    """Test batch function with grapheme segmentation enabled."""
+    pairs_grapheme = [
+        ("kitten", "sitten"),
+        ("अनुच्छेद", "अनुछेद"),  # Hindi example: grapheme diff 1, char diff 2
+        ("é", "e"),  # Combining characters: grapheme diff 1, char diff 1
+        ("ä", "ä"),  # Decomposed vs precomposed: grapheme diff 1, char diff 1-2
+        ("👩‍👩‍👧‍👦", "👨‍👩‍👧‍👦"),  # Family emoji: grapheme diff 1
+        ("café", "cafe"),  # With accent
+        ("🦀", "🐍"),  # Emojis
+        ("hello 世界", "hello world"), # Mixed script
+    ]
+
+    result_grapheme = levenshtein_batch(pairs_grapheme, grapheme_segmentation=True)
+    expected_grapheme = [levenshtein(s1, s2, grapheme_segmentation=True) for s1, s2 in pairs_grapheme]
+    assert result_grapheme == expected_grapheme
+
+    # Also test that char segmentation yields different results for relevant cases
+    result_char = levenshtein_batch(pairs_grapheme, grapheme_segmentation=False)
+    expected_char = [levenshtein(s1, s2, grapheme_segmentation=False) for s1, s2 in pairs_grapheme]
+
+    # For "अनुच्छेद", "अनुछेद": grapheme_segmentation=True should be 1, False should be 2
+    assert expected_grapheme[1] == 1
+    assert expected_char[1] == 2
+
+    # For "é", "e": grapheme_segmentation=True should be 1, False should be 1 (e + accent vs e)
+    assert expected_grapheme[2] == 1
+    assert expected_char[2] == 1 # This specific case is 1 for both because 'é' has 1 grapheme and 2 chars, 'e' has 1 grapheme and 1 char.
+
+    # For "ä", "ä": grapheme_segmentation=True should be 1, False should be 2 for "a\u{0308}" vs "ä"
+    assert expected_grapheme[3] == 1
+    # Check that it's different from the grapheme result for this case
+    assert result_grapheme != result_char 
+
