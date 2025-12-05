@@ -368,7 +368,6 @@ wheels = [
 
 [[package]]
 name = "pyo3-levenshtein"
-version = "0.2.2"
 source = { editable = "." }
 
 [package.dev-dependencies]

@@ -182,7 +182,7 @@ dependencies = [
 
 [[package]]
 name = "pyo3-levenshtein"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "dashmap",
  "once_cell",
